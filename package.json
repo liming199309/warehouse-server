@@ -1,0 +1,18 @@
+{
+  "name": "mulongshan-warehouse-server",
+  "version": "1.0.0",
+  "description": "安徽牧龙山铁皮石斛生物科技开发有限公司 · 进销存后端（多人共享）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "pg": "^8.23.0"
+  }
+}

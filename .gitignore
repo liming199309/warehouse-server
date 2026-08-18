@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+package-lock.json
+
+# 本地数据（部署到 Render 后用 Neon，不需要本地 data）
+data/store.json
+data/store.tmp.json
+data/uploads/
+
+# 环境变量
+.env
+.env.local
+.env.production
+
+# 日志
+*.log
+npm-debug.log*
+
+# 系统
+.DS_Store
+Thumbs.db

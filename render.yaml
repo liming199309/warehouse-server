@@ -1,0 +1,33 @@
+# render.yaml - Render 部署配置（Blueprint 模式）
+# 使用：Render 控制台 → New → Blueprint → 选这个仓库
+services:
+  - type: web
+    name: mulongshan-warehouse
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: RENDER
+        value: "true"
+      - key: UPLOADS_DIR
+        value: /tmp/uploads
+      # ======== 必填：数据库 ========
+      - key: DATABASE_URL
+        sync: false
+      # ======== 必填：钉钉微应用 ========
+      - key: DINGTALK_CORP_ID
+        sync: false
+      - key: DINGTALK_AGENT_ID
+        sync: false
+      - key: DINGTALK_APP_KEY
+        sync: false
+      - key: DINGTALK_APP_SECRET
+        sync: false
+      # ======== 可选：JWT 签名密钥 ========
+      - key: JWT_SECRET
+        generateValue: true

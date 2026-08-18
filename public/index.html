@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>牧龙山石斛进销存 · 管理后台</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 登录 -->
+  <div id="login-view">
+    <h1>牧龙山石斛进销存</h1>
+    <div class="sub">安徽牧龙山铁皮石斛生物科技开发有限公司 · 管理后台</div>
+    <div class="field">
+      <label>账号</label>
+      <input id="login-user" placeholder="如 admin" value="admin">
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input id="login-pwd" type="password" placeholder="如 admin123" value="admin123">
+    </div>
+    <button class="btn btn-block" onclick="doLogin()">登录</button>
+    <div id="login-msg" class="msg"></div>
+    <div class="sub" style="margin-top:16px;">默认管理员：admin / admin123</div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="app-view">
+    <div class="topbar">
+      <div class="company">牧龙山石斛进销存 · 管理后台</div>
+      <div class="user">
+        <span id="user-name"></span>
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()">退出</button>
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="active" data-tab="inv" onclick="switchTab('inv', this)">库存</button>
+      <button data-tab="upload" onclick="switchTab('upload', this)">批量上传</button>
+      <button data-tab="orders" id="nav-orders" onclick="switchTab('orders', this)">订单</button>
+      <button data-tab="rec" onclick="switchTab('rec', this)">交易记录</button>
+      <button data-tab="stat" onclick="switchTab('stat', this)">统计</button>
+      <button data-tab="users" id="nav-users" onclick="switchTab('users', this)">用户管理</button>
+    </div>
+
+    <!-- 库存 -->
+    <div id="sec-inv" class="section active">
+      <div class="toolbar">
+        <input type="text" id="inv-search" class="search-input" placeholder="🔍 搜编号/名称/批号/规格/供应商" oninput="applyInvFilter()" />
+        <select id="inv-cat" onchange="applyInvFilter()" class="filter-select">
+          <option value="all">全部类别</option>
+          <option value="原材料">原材料</option>
+          <option value="成品">成品</option>
+          <option value="包材">包材</option>
+        </select>
+        <select id="inv-comp" onchange="applyInvFilter()" class="filter-select">
+          <option value="all">全部公司</option>
+          <option value="安徽牧龙山铁皮石斛生物科技有限公司">安徽牧龙山</option>
+          <option value="安徽斛小鲜健康科技有限公司">安徽斛小鲜</option>
+          <option value="安徽霍山霍金石斛开发有限公司">安徽霍山霍金</option>
+          <option value="江门市斛小鲜陈皮健康产业有限公司">江门斛小鲜陈皮</option>
+        </select>
+        <select id="inv-st" onchange="applyInvFilter()" class="filter-select">
+          <option value="all">全部状态</option>
+          <option value="normal">正常</option>
+          <option value="warning">低库存</option>
+          <option value="danger">临期</option>
+          <option value="expired">已过期</option>
+        </select>
+        <button class="btn btn-sm" onclick="loadInventory()">刷新</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportInventory()">导出库存CSV</button>
+        <span id="inv-count" class="count-tip">加载中...</span>
+      </div>
+      <div style="max-height:62vh;overflow:auto;">
+        <table id="inv-table">
+          <thead><tr>
+            <th>编号</th><th>名称</th><th>批号</th><th>规格</th>
+            <th>类别</th><th>所属公司仓库</th><th>单位</th>
+            <th class="num">数量</th><th class="num">采购单价</th><th class="num">销售单价</th><th class="num">库存成本</th>
+            <th>供应商</th><th>库位</th><th>入库日期</th><th>状态</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 批量上传 -->
+    <div id="sec-upload" class="section">
+      <h2>一次性上传商品信息</h2>
+      <div class="toolbar">
+        <button class="btn btn-ghost btn-sm" onclick="downloadTemplate()">下载CSV模板</button>
+        <input type="file" id="upload-file" accept=".csv">
+        <button class="btn btn-sm" onclick="uploadCsv()">上传并入库</button>
+      </div>
+      <div id="upload-msg" class="msg"></div>
+      <p style="font-size:13px;color:#888;margin-top:10px;">
+        模板列：商品编号,商品名称,生产批号,规格,备注,类别,所属公司仓库,单位,生产日期,有效期,有效期截止日,数量,采购单价,销售单价,录入人,库位,供应商。<br>
+        类别填：原材料、成品、包材；所属公司仓库填四家之一（安徽斛小鲜健康科技有限公司 / 安徽牧龙山铁皮石斛生物科技有限公司 / 安徽霍山霍金石斛开发有限公司 / 江门市斛小鲜陈皮健康产业有限公司）；<br>
+        同名+同批号+同公司视为同一批次，重复上传则**累加数量**并刷新采购单价；字段内请勿包含英文逗号。
+      </p>
+    </div>
+
+    <!-- 订单 -->
+    <div id="sec-orders" class="section">
+      <div class="toolbar">
+        <button class="btn btn-sm" onclick="loadOrders()">刷新</button>
+        <button class="btn btn-sm" id="btn-new-order" onclick="showOrderForm()">+ 申请订单</button>
+        <select id="order-filter" onchange="loadOrders()" style="padding:6px 10px;">
+          <option value="all">全部状态</option>
+          <option value="pending">待审核</option>
+          <option value="manager_approved">管理已审</option>
+          <option value="finance_approved">财务已审</option>
+          <option value="packed">已打包待发货</option>
+          <option value="done">已完成</option>
+          <option value="rejected">已驳回</option>
+          <option value="stock_short">库存不足</option>
+        </select>
+      </div>
+
+      <div id="order-form" class="panel" style="display:none;">
+        <h3>申请订单（出库）</h3>
+        <div id="order-items"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addOrderItemRow()">+ 添加商品</button>
+        <div class="field" style="margin-top:12px;">
+          <label>客户</label>
+          <input id="order-customer" placeholder="如 上海同仁堂">
+        </div>
+        <div class="field">
+          <label>备注</label>
+          <input id="order-note" placeholder="选填">
+        </div>
+        <div class="toolbar">
+          <button class="btn btn-sm" onclick="submitOrder()">提交申请</button>
+          <button class="btn btn-ghost btn-sm" onclick="hideOrderForm()">取消</button>
+          <span id="order-msg" class="msg"></span>
+        </div>
+      </div>
+
+      <div id="order-detail" class="panel" style="display:none;"></div>
+
+      <div style="max-height:58vh;overflow:auto;">
+        <table id="order-table">
+          <thead><tr>
+            <th>单号</th><th>客户</th><th>商品</th><th class="num">金额</th>
+            <th>状态</th><th>创建人</th><th>时间</th><th>操作</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 交易记录 -->
+    <div id="sec-rec" class="section">
+      <div class="toolbar">
+        <input type="text" id="rec-search" class="search-input" placeholder="🔍 搜单号/商品名/批号/规格/经办/客户" oninput="applyRecFilter()" />
+        <select id="rec-filter" onchange="loadRecords()" class="filter-select">
+          <option value="all">全部类型</option>
+          <option value="inbound">入库</option>
+          <option value="outbound">销售</option>
+          <option value="return">退库</option>
+        </select>
+        <select id="rec-invoice" onchange="applyRecFilter()" class="filter-select">
+          <option value="all">全部发票</option>
+          <option value="yes">有发票</option>
+          <option value="no">无发票</option>
+        </select>
+        <button class="btn btn-sm" onclick="loadRecords()">刷新</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportRecords()">导出记录CSV</button>
+        <span id="rec-count" class="count-tip">加载中...</span>
+      </div>
+      <div style="max-height:62vh;overflow:auto;">
+        <table id="rec-table">
+          <thead><tr>
+            <th>单号</th><th>类型</th><th>商品</th><th>批号</th><th>规格</th><th>所属公司</th>
+            <th class="num">数量</th><th class="num">单价类型/单价</th><th class="num">毛利率</th><th class="num">金额</th>
+            <th>经办人</th><th>供应商/客户</th><th>时间</th><th>备注</th><th>发票</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 统计 -->
+    <div id="sec-stat" class="section">
+      <div class="toolbar">
+        <select id="stat-range" onchange="loadStats()" style="padding:6px 10px;">
+          <option value="daily">按日</option>
+          <option value="monthly">按月</option>
+          <option value="yearly">按年</option>
+        </select>
+        <button class="btn btn-sm" onclick="loadStats()">查询</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportStats()">导出统计CSV</button>
+      </div>
+      <div class="cards" id="stat-cards"></div>
+      <div style="max-height:55vh;overflow:auto;">
+        <table id="stat-table">
+          <thead><tr>
+            <th id="stat-key-h">日期</th>
+            <th class="num">入库量</th><th class="num">入库额</th>
+            <th class="num">销售量</th><th class="num">销售额</th>
+            <th class="num">退库量</th><th class="num">退库额</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 用户管理 -->
+    <div id="sec-users" class="section">
+      <div class="toolbar">
+        <input type="text" id="user-search" class="search-input" placeholder="🔍 搜账号/姓名/手机/区域" oninput="applyUserFilter()" />
+        <select id="user-role-filter" onchange="applyUserFilter()" class="filter-select">
+          <option value="all">全部角色</option>
+          <option value="admin">管理员</option>
+          <option value="manager">管理人员</option>
+          <option value="finance">财务人员</option>
+          <option value="warehouse">仓库人员</option>
+          <option value="sales">销售人员</option>
+          <option value="shipping">发货人员</option>
+        </select>
+        <select id="user-status-filter" onchange="applyUserFilter()" class="filter-select">
+          <option value="all">全部状态</option>
+          <option value="enabled">正常</option>
+          <option value="disabled">已禁用</option>
+        </select>
+        <button class="btn btn-sm" onclick="loadUsers()">刷新</button>
+        <button class="btn btn-sm" onclick="showUserForm()">+ 新增人员</button>
+        <span id="user-count" class="count-tip">加载中...</span>
+      </div>
+      <div id="user-form" class="panel" style="display:none;">
+        <h3>新增 / 编辑人员</h3>
+        <div class="form-grid">
+          <label>账号<input id="u-username" placeholder="登录账号，唯一"></label>
+          <label>姓名<input id="u-name" placeholder="如 张三"></label>
+          <label>初始密码<input id="u-password" type="password" placeholder="初始密码"></label>
+          <label>角色<select id="u-role"></select></label>
+          <label>负责区域/点位<input id="u-area" placeholder="如 成品仓-01 / 电商组"></label>
+          <label>手机号<input id="u-phone" placeholder="选填"></label>
+        </div>
+        <div style="margin:10px 0 4px;font-size:13px;color:#555;">赋予权限（可单独勾选，离职可禁用）</div>
+        <div id="u-perm-box" class="perm-box"></div>
+        <div class="toolbar">
+          <button class="btn btn-sm" onclick="saveUser()">保存</button>
+          <button class="btn btn-ghost btn-sm" onclick="hideUserForm()">取消</button>
+          <span id="u-msg" class="msg"></span>
+        </div>
+      </div>
+      <div style="max-height:58vh;overflow:auto;">
+        <table id="user-table">
+          <thead><tr>
+            <th>账号</th><th>姓名</th><th>角色</th><th>负责区域</th><th>手机</th><th>状态</th><th>操作</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
