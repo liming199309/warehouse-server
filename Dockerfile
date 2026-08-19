@@ -1,6 +1,7 @@
 # Dockerfile - 微信云托管部署用
 # 云托管会自动识别这个文件并构建镜像，不用你手动操作
-FROM node:20-alpine
+# 基础镜像用腾讯源，防止构建机拉 Docker Hub 超时
+FROM ccr.ccs.tencentyun.com/library/node:20-alpine
 
 WORKDIR /app
 
