@@ -4,8 +4,12 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# 用国内 npm 镜像源，防止构建时拉依赖超时
+RUN npm config set registry https://registry.npmmirror.com
+
 # 先拷依赖清单，利用 Docker 缓存加速构建
 COPY package.json ./
+COPY package-lock.json ./
 RUN npm install --omit=dev
 
 # 再拷业务代码
