@@ -4,6 +4,7 @@ services:
   - type: web
     name: mulongshan-warehouse
     runtime: node
+    region: singapore
     plan: free
     buildCommand: npm install
     startCommand: npm start
