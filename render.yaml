@@ -11,23 +11,14 @@ services:
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: "20"
       - key: RENDER
         value: "true"
       - key: UPLOADS_DIR
         value: /tmp/uploads
-      # ======== 必填：数据库 ========
+      # ======== 必填：Neon 数据库连接串 ========
       - key: DATABASE_URL
         sync: false
-      # ======== 必填：钉钉微应用 ========
-      - key: DINGTALK_CORP_ID
-        sync: false
-      - key: DINGTALK_AGENT_ID
-        sync: false
-      - key: DINGTALK_APP_KEY
-        sync: false
-      - key: DINGTALK_APP_SECRET
-        sync: false
-      # ======== 可选：JWT 签名密钥 ========
+      # ======== JWT 签名密钥（自动生成） ========
       - key: JWT_SECRET
         generateValue: true
