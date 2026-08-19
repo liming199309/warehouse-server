@@ -92,6 +92,24 @@ https://mulonshan-warehouse.onrender.com/api/health
 
 看到 `db:"postgres"` 就 OK ✅
 
+### 第 4.5 步：把本地真实数据迁到云端（关键！别跳过）
+
+直接部署后云端是空的演示数据。把你电脑里的真实库存/用户/流水迁上去：
+
+1. 打开本地 `warehouse-server\.env`，把第 1 步 Neon 的 connection string 填到 `DATABASE_URL=` 后面
+2. 在本地 PowerShell 跑：
+   ```bash
+   cd warehouse-server
+   node migrate-to-neon.js
+   ```
+3. 它会先打印本地和云端的数据概况；云端已有数据时需要确认覆盖：
+   ```bash
+   node migrate-to-neon.js --force
+   ```
+4. 看到 `✅ 完成` 后，重新打开你的 Render 网址，登录 admin / admin123，数据应该和本地一模一样
+
+> `.env` 在 .gitignore 里，不会被推上 GitHub，数据库密码不会泄露。
+
 ### 第 5 步：配置防冷启动（5 分钟）
 
 1. 注册 https://uptimerobot.com → Free Account
