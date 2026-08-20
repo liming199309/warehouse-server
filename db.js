@@ -36,6 +36,13 @@ async function initPg() {
     statement_timeout: 20 * 1000,       // 单条 SQL 20s 超时
     keepAlive: true                     // 防止被中间网络设备掐断
   })
+
+  // 关键：连接池错误处理 + 自动重连保护
+  pgClient.on('error', (err) => {
+    console.error('[DB] 连接池异常（Neon 空闲断连常见）:', err.message)
+    // 不退出进程，让连接池自动重建
+  })
+
   // 关键：先做一次实测，确认真连得通（避免后端 listen 后第一次请求才触发 cold start）
   const c = await pgClient.connect()
   try {
@@ -83,10 +90,31 @@ function persistLocal(data) {
   throw new Error('数据持久化失败：' + (lastErr && lastErr.message))
 }
 
-// Postgres 落盘（行锁防并发）
+// Postgres 落盘（行锁防并发 + 自动重连）
 async function persistPg(data) {
-  const sql = `UPDATE app_state SET data = $1::jsonb, updated_at = NOW() WHERE id = 1`
-  await pgClient.query(sql, [JSON.stringify(data)])
+  await execWithRetry(() => pgClient.query(
+    `UPDATE app_state SET data = $1::jsonb, updated_at = NOW() WHERE id = 1`,
+    [JSON.stringify(data)]
+  ))
+}
+
+// 通用 SQL 执行重试（处理 Neon 空闲断连）
+async function execWithRetry(fn, retries = 2) {
+  let lastErr
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      lastErr = e
+      const msg = (e && e.message) || ''
+      // 只有断连类错误才重试
+      const isConnError = /Connection terminated|ECONNRESET|ETIMEDOUT|ENOTFOUND|connection terminated/i.test(msg)
+      if (!isConnError || i === retries) throw e
+      console.warn(`[DB] 连接断开，${i + 1}/${retries} 次重试...`)
+      await new Promise(r => setTimeout(r, 300 * (i + 1)))
+    }
+  }
+  throw lastErr
 }
 
 function persist(data) {
@@ -134,10 +162,10 @@ function seedLocal() {
 
 async function seedPg() {
   const data = buildSeedData()
-  await pgClient.query(
+  await execWithRetry(() => pgClient.query(
     `INSERT INTO app_state (id, data) VALUES (1, $1::jsonb) ON CONFLICT (id) DO NOTHING`,
     [JSON.stringify(data)]
-  )
+  ))
   return data
 }
 
@@ -208,7 +236,7 @@ function loadLocal() {
 }
 
 async function loadPg() {
-  const r = await pgClient.query('SELECT data FROM app_state WHERE id = 1')
+  const r = await execWithRetry(() => pgClient.query('SELECT data FROM app_state WHERE id = 1'))
   if (r.rows.length === 0 || !r.rows[0].data) {
     return await seedPg()
   }
@@ -225,6 +253,14 @@ async function bootstrap() {
       records: state.records.length,
       users: state.users.length
     })
+    // 关键：保活定时器，每 50s PING 一次，防止 Neon 空闲断连
+    setInterval(() => {
+      if (!usePg || !pgClient) return
+      pgClient.query('SELECT 1').catch(e => {
+        console.warn('[DB] 保活 PING 失败（连接池会自动重建）:', e.message)
+      })
+    }, 50 * 1000).unref()
+    console.log('[DB] 已启动保活定时器（50s 间隔）')
   } else {
     state = loadLocal()
     console.log('[DB] 数据已从本地 JSON 加载：', {

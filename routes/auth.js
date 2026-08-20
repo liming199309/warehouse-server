@@ -8,10 +8,20 @@ const { DEFAULT_PERMS, ROLES } = require('../roles')
 router.post('/login', (req, res) => {
   const { username, password } = req.body
   if (!username || !password) return res.status(400).json({ success: false, msg: '请输入账号和密码' })
-  const user = auth.login(username, password)
-  if (!user) return res.status(401).json({ success: false, msg: '账号或密码错误' })
-  const token = auth.signToken(user)
-  res.json({ success: true, token, user })
+  try {
+    const user = auth.login(username, password)
+    if (!user) return res.status(401).json({ success: false, msg: '账号或密码错误' })
+    const token = auth.signToken(user)
+    res.json({ success: true, token, user })
+  } catch (e) {
+    console.error('[login] 异常：', e)
+    // 数据库断连时给出友好提示（不暴露 SQL 细节）
+    const msg = (e && e.message) || ''
+    if (/Connection terminated|ECONNRESET|ETIMEDOUT|ENOTFOUND|connection terminated/i.test(msg)) {
+      return res.status(503).json({ success: false, msg: '数据库连接断开，请稍后重试（系统正在自动重连）' })
+    }
+    res.status(500).json({ success: false, msg: '登录失败：' + msg })
+  }
 })
 
 // ===== 钉钉企业免登 =====
