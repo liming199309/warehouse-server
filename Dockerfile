@@ -1,22 +1,14 @@
-# Dockerfile - 微信云托管部署用
-# 云托管会自动识别这个文件并构建镜像，不用你手动操作
-# 基础镜像用腾讯源，防止构建机拉 Docker Hub 超时
 FROM ccr.ccs.tencentyun.com/library/node:20-alpine
 
 WORKDIR /app
 
-# 用国内 npm 镜像源，防止构建时拉依赖超时
 RUN npm config set registry https://registry.npmmirror.com
 
-# 先拷依赖清单，利用 Docker 缓存加速构建
 COPY package.json ./
-COPY package-lock.json ./
-RUN npm install --omit=dev
+RUN npm install --production
 
-# 再拷业务代码
 COPY . .
 
-# 云托管默认把流量打到容器 80 端口，让服务监听 80
 ENV PORT=80
 EXPOSE 80
 
