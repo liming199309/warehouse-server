@@ -26,23 +26,30 @@ function shouldUsePg() {
 
 async function initPg() {
   if (!shouldUsePg()) return
-  const { Client } = require('pg')
-  pgClient = new Client({
+  const { Pool } = require('pg')
+  pgClient = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } // Neon 等云 PG 强制 SSL
+    ssl: { rejectUnauthorized: false }, // Neon 等云 PG 强制 SSL
+    max: 5,                             // 连接池大小（足够 4 个并发请求 + 1 个写锁）
+    idleTimeoutMillis: 30 * 1000,       // 30s 空闲后释放
+    connectionTimeoutMillis: 10 * 1000, // 连不上 10s 超时
+    statement_timeout: 20 * 1000,       // 单条 SQL 20s 超时
+    keepAlive: true                     // 防止被中间网络设备掐断
   })
-  await pgClient.connect()
-  // 建表（首次启动）
-  await pgClient.query(`
-    CREATE TABLE IF NOT EXISTS app_state (
+  // 关键：先做一次实测，确认真连得通（避免后端 listen 后第一次请求才触发 cold start）
+  const c = await pgClient.connect()
+  try {
+    await c.query(`CREATE TABLE IF NOT EXISTS app_state (
       id INTEGER PRIMARY KEY,
       data JSONB NOT NULL,
       updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `)
-  // 启用 pgcrypto 给 jsonb 用（可选，简化版本用 text 即可）
+    )`)
+    await c.query('SELECT 1')
+  } finally {
+    c.release()
+  }
   usePg = true
-  console.log('[DB] 已连接 Postgres')
+  console.log('[DB] 已连接 Postgres（连接池模式）')
 }
 
 function ensureDir() {

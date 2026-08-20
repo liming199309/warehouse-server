@@ -16,12 +16,23 @@ const ordersRoutes = require('./routes/orders')
 const uploadRoutes = require('./routes/upload')
 const db = require('./db')
 
+let __ready = false  // 标记 DB bootstrap 是否完成（保护冷启动期请求）
+
 function build() {
   const app = express()
   const PORT = process.env.PORT || 3000
 
   app.use(cors()) // 允许小程序/网页跨域访问
   app.use(express.json({ limit: '20mb' }))
+
+  // 健康检查放在启动拦截之前：微信云托管探针随时可访问
+  app.get('/api/health', (req, res) => res.json({ ok: true, ready: __ready, time: Date.now(), db: db.isPg() ? 'postgres' : 'json' }))
+
+  // 启动期拦截：DB 没就绪前直接返回 503，避免 cold start 期间请求被卡死
+  app.use((req, res, next) => {
+    if (!__ready) return res.status(503).json({ success: false, msg: '服务启动中，请稍后再试', ready: false })
+    next()
+  })
 
   app.use('/api/auth', authRoutes)
   app.use('/api/inventory', inventoryRoutes)
@@ -39,14 +50,13 @@ function build() {
   // 电脑端网页后台（静态文件）
   app.use(express.static(path.join(__dirname, 'public')))
 
-  app.get('/api/health', (req, res) => res.json({ ok: true, time: Date.now(), db: db.isPg() ? 'postgres' : 'json' }))
-
   return { app, PORT, UPLOADS_DIR }
 }
 
 async function start() {
   // 1) 初始化 DB（连 PG 或加载本地 JSON）
   await db.bootstrap()
+  __ready = true
 
   // 2) 把 build 后的 app 启起来
   const { app, PORT } = build()
