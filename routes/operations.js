@@ -92,25 +92,60 @@ function doOutbound(state, body, req) {
   return { success: true, msg: '销售出库成功', orderNo, lot }
 }
 
-// 退库（退货入回库）：回加到指定批次
+// 退库：分两种类型
+// returnType=sales：客户退货，匹配 outbound 订单，库存增加
+// returnType=purchase：退给供应商，匹配 inbound 订单，库存扣减
 function doReturn(state, body, req) {
-  const lot = state.inventory.find(i => i.id === body.lotId)
-  if (!lot) return { success: false, msg: '批次不存在，请重新选择' }
+  const returnType = body.returnType || 'sales'
+  if (returnType !== 'sales' && returnType !== 'purchase') {
+    return { success: false, msg: '退库类型无效' }
+  }
+  const orderNo = (body.orderNo || '').trim()
+  if (!orderNo) return { success: false, msg: '请选择要匹配的原始订单' }
+  const order = state.records.find(r => r.orderNo === orderNo && r.type === (returnType === 'sales' ? 'outbound' : 'inbound'))
+  if (!order) return { success: false, msg: '未找到匹配的订单' }
+
+  const lot = state.inventory.find(i => i.id === order.itemId)
+  if (!lot) return { success: false, msg: '对应批次不存在' }
+
   const qty = parseInt(body.quantity)
   if (!qty || qty <= 0) return { success: false, msg: '退库数量无效' }
-  lot.quantity += qty
+
+  const reason = (body.reason || '').trim()
+  if (!reason) return { success: false, msg: '请填写退库理由' }
+
+  // 计算该订单已退数量（同类型、同原始订单）
+  const returnedQty = state.records
+    .filter(r => r.type === 'return' && r.returnType === returnType && r.originalOrderNo === orderNo)
+    .reduce((sum, r) => sum + parseInt(r.quantity || 0), 0)
+  const maxQty = order.quantity - returnedQty
+  if (qty > maxQty) return { success: false, msg: `最多可退 ${maxQty} ${order.unit}（已退 ${returnedQty}）` }
+
+  if (returnType === 'sales') {
+    lot.quantity += qty
+  } else {
+    if (lot.quantity < qty) return { success: false, msg: `库存不足，无法退给供应商（当前 ${lot.quantity} ${lot.unit}）` }
+    lot.quantity -= qty
+  }
   lot.lastUpdate = now()
-  const orderNo = genOrderNo()
+
+  const price = parseFloat(order.price) || (returnType === 'sales' ? lot.purchasePrice : 0)
+  const newOrderNo = genOrderNo()
+  const remarkExtra = (body.remark || '').trim()
   state.records.unshift({
-    id: orderNo, orderNo, type: 'return', itemId: lot.id, itemName: lot.name,
-    quantity: qty, unit: lot.unit, price: lot.purchasePrice, priceType: 'purchase',
-    totalAmount: (qty * lot.purchasePrice).toFixed(2),
+    id: newOrderNo, orderNo: newOrderNo, type: 'return', returnType,
+    originalOrderNo: orderNo,
+    itemId: lot.id, itemName: lot.name,
+    quantity: qty, unit: lot.unit, price, priceType: returnType === 'sales' ? 'sale' : 'purchase',
+    totalAmount: (qty * price).toFixed(2),
     batchNo: lot.batchNo, spec: lot.spec, grossMargin: null,
-    operator: body.operator || req.user.name, customer: body.customer || '',
-    remark: (body.remark || '').trim() || '退货入回库',
+    operator: body.operator || req.user.name,
+    customer: returnType === 'sales' ? (order.customer || '') : '',
+    supplier: returnType === 'purchase' ? (order.supplier || '') : '',
+    reason, remark: reason + (remarkExtra ? ' | ' + remarkExtra : ''),
     invoiceUrl: body.invoiceUrl || '', timestamp: now()
   })
-  return { success: true, msg: '退库成功', orderNo, lot }
+  return { success: true, msg: '退库成功', orderNo: newOrderNo, lot }
 }
 
 router.post('/inbound', auth.authRequired, async (req, res) => {
@@ -126,6 +161,45 @@ router.post('/outbound', auth.authRequired, async (req, res) => {
 router.post('/return', auth.authRequired, async (req, res) => {
   try { res.json(await db.mutate({ nonce: req.body.nonce, fn: (s) => doReturn(s, req.body, req) })) }
   catch (e) { res.status(e.duplicate ? 409 : 400).json({ success: false, msg: e.message }) }
+})
+
+// 查询可匹配的历史订单（退库用）
+// type=outbound | inbound；keyword 匹配商品名/批号/公司
+router.get('/orders', auth.authRequired, (req, res) => {
+  const type = req.query.type
+  const keyword = (req.query.keyword || '').trim().toLowerCase()
+  const name = (req.query.name || '').trim().toLowerCase()
+  if (type !== 'outbound' && type !== 'inbound') {
+    return res.status(400).json({ success: false, msg: 'type 必须是 outbound 或 inbound' })
+  }
+  let records = db.getState().records.filter(r => r.type === type)
+  // 同订单号可能对应多条（理论上不应出现），按订单号去重取最新
+  const seen = new Map()
+  records.forEach(r => {
+    const existing = seen.get(r.orderNo)
+    if (!existing || r.timestamp > existing.timestamp) seen.set(r.orderNo, r)
+  })
+  records = Array.from(seen.values())
+  if (name || keyword) {
+    const kw = name || keyword
+    records = records.filter(r =>
+      (r.itemName || '').toLowerCase().includes(kw) ||
+      (r.batchNo || '').toLowerCase().includes(kw) ||
+      (r.customer || '').toLowerCase().includes(kw) ||
+      (r.supplier || '').toLowerCase().includes(kw)
+    )
+  }
+  // 计算每个订单已退数量
+  const state = db.getState()
+  records.forEach(r => {
+    const rt = type === 'outbound' ? 'sales' : 'purchase'
+    r.returnedQty = state.records
+      .filter(x => x.type === 'return' && x.returnType === rt && x.originalOrderNo === r.orderNo)
+      .reduce((sum, x) => sum + parseInt(x.quantity || 0), 0)
+    r.returnableQty = Math.max(0, r.quantity - r.returnedQty)
+  })
+  records.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+  res.json({ success: true, orders: records })
 })
 
 // 同步：更新同步时间（小程序点击“同步”时调用）
