@@ -10,9 +10,9 @@ const ROLES = {
 
 // 各角色默认权限（管理员可单独赋予/收回）
 const DEFAULT_PERMS = {
-  admin:     ['user:manage','order:view','order:create','order:audit_manager','order:audit_finance','stock:in','stock:out','stock:return','order:pack','order:ship'],
-  manager:   ['order:view','order:audit_manager'],
-  finance:   ['order:view','order:audit_finance'],
+  admin:     ['user:manage','order:view','order:create','order:audit_manager','order:audit_finance','stock:in','stock:out','stock:return','order:pack','order:ship','price:view'],
+  manager:   ['order:view','order:audit_manager','price:view'],
+  finance:   ['order:view','order:audit_finance','price:view'],
   warehouse: ['order:view','stock:in','stock:return','order:pack'],
   shipping:  ['order:view','order:ship'],
   sales:     ['order:view','order:create','stock:out']
@@ -28,7 +28,8 @@ const PERM_NAMES = {
   'stock:out': '出库',
   'stock:return': '退库',
   'order:pack': '备货打包',
-  'order:ship': '发货'
+  'order:ship': '发货',
+  'price:view': '查看价格'
 }
 
 // 订单状态机

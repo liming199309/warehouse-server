@@ -8,6 +8,23 @@ function genLotId() {
   return 'LOT' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase()
 }
 
+// 是否有价格查看权限
+function hasPrice(req) {
+  return !!(req.user.perms && req.user.perms.includes('price:view'))
+}
+
+// 价格脱敏：无权限时将价格相关字段置 null（前端据此隐藏）
+function maskPrices(item, canView) {
+  if (canView) return item
+  return {
+    ...item,
+    purchasePrice: null,
+    salePrice: null,
+    costAmount: null,
+    price: null
+  }
+}
+
 // 批次列表（可按商品名模糊筛选，出库选批用；只返回有库存的批次，按入库时间升序=先进先出）
 router.get('/lots', auth.authRequired, (req, res) => {
   const name = (req.query.name || '').trim().toLowerCase()
@@ -20,19 +37,22 @@ router.get('/lots', auth.authRequired, (req, res) => {
     const t = (a.lastUpdate || a.createTime || '').localeCompare(b.lastUpdate || b.createTime || '')
     return t !== 0 ? t : (a.createTime || '').localeCompare(b.createTime || '')
   })
-  res.json({ success: true, lots })
+  const canView = hasPrice(req)
+  res.json({ success: true, lots: lots.map(l => maskPrices(l, canView)) })
 })
 
 // 库存列表
 router.get('/', auth.authRequired, (req, res) => {
-  res.json({ success: true, inventory: db.getState().inventory })
+  const canView = hasPrice(req)
+  res.json({ success: true, inventory: db.getState().inventory.map(i => maskPrices(i, canView)) })
 })
 
 // 单个批次
 router.get('/:id', auth.authRequired, (req, res) => {
   const item = db.getState().inventory.find(i => i.id === req.params.id)
   if (!item) return res.status(404).json({ success: false, msg: '批次不存在' })
-  res.json({ success: true, item })
+  const canView = hasPrice(req)
+  res.json({ success: true, item: maskPrices(item, canView) })
 })
 
 // 新增批次（带一笔入库流水）

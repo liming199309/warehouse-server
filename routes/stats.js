@@ -33,6 +33,7 @@ router.get('/', auth.authRequired, (req, res) => {
     totalQuantity += it.quantity || 0
     totalAmount += (it.quantity || 0) * (it.purchasePrice || 0)
   })
+  const canViewPrice = !!(req.user.perms && req.user.perms.includes('price:view'))
 
   res.json({
     success: true,
@@ -40,11 +41,11 @@ router.get('/', auth.authRequired, (req, res) => {
     summary: {
       totalItems,
       totalQuantity,
-      totalAmount: totalAmount.toFixed(2),
+      totalAmount: canViewPrice ? totalAmount.toFixed(2) : null,
       inboundQty: list.reduce((s, g) => s + g.inboundQty, 0),
       outboundQty: list.reduce((s, g) => s + g.outboundQty, 0),
-      inboundAmt: list.reduce((s, g) => s + g.inboundAmt, 0).toFixed(2),
-      outboundAmt: list.reduce((s, g) => s + g.outboundAmt, 0).toFixed(2)
+      inboundAmt: canViewPrice ? list.reduce((s, g) => s + g.inboundAmt, 0).toFixed(2) : null,
+      outboundAmt: canViewPrice ? list.reduce((s, g) => s + g.outboundAmt, 0).toFixed(2) : null
     },
     lastSyncTime: state.meta.lastSyncTime
   })
