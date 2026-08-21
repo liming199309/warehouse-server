@@ -11,15 +11,8 @@ router.post('/login', async (req, res) => {
   try {
     const user = auth.login(username, password)
     if (!user) return res.status(401).json({ success: false, msg: '账号或密码错误' })
-    // 单设备登录：每次登录生成新 sid 写入用户记录（旧设备 token 的 sid 失配 → 被顶下线）
-    // 先持久化 sid 再签发 token，避免首次请求 sid 校验失败
-    const sid = auth.genSid()
-    await db.mutate({ fn: (s) => {
-      const u = s.users.find(x => x.username === username)
-      if (u) u.sid = sid
-      return { success: true }
-    } })
-    const token = auth.signToken({ ...user, sid })
+    // 多设备登录：不再生成 sid 顶掉旧设备，允许多台设备同时登录同一账号
+    const token = auth.signToken(user)
     res.json({ success: true, token, user })
   } catch (e) {
     console.error('[login] 异常：', e)
@@ -123,21 +116,14 @@ router.post('/dingtalk-login', async (req, res) => {
       if (dtMobile && user.phone !== dtMobile) user.phone = dtMobile
     }
 
-    // 5) 签发 JWT（单设备登录：生成新 sid，顶掉旧设备）
-    const sid = auth.genSid()
-    db.mutate({ fn: (s) => {
-      const u = s.users.find(x => x.username === user.username)
-      if (u) u.sid = sid
-      return { success: true }
-    } })
+    // 5) 签发 JWT（多设备登录：不再顶掉旧设备）
     const tokenUser = {
       username: user.username,
       name: user.name,
       role: user.role,
       roleKey: user.roleKey,
       perms: user.perms,
-      area: user.area || '',
-      sid
+      area: user.area || ''
     }
     const token = auth.signToken(tokenUser)
     res.json({ success: true, token, user: tokenUser, isNew, source: 'dingtalk' })
