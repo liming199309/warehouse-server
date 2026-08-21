@@ -9,6 +9,8 @@ router.post('/login', async (req, res) => {
   const { username, password } = req.body
   if (!username || !password) return res.status(400).json({ success: false, msg: '请输入账号和密码' })
   try {
+    // 登录前先从 Neon 刷新内存（本地/云端双实例场景下，另一端新建的账号立即可登录）
+    await db.reloadState()
     const user = auth.login(username, password)
     if (!user) return res.status(401).json({ success: false, msg: '账号或密码错误' })
     // 多设备登录：不再生成 sid 顶掉旧设备，允许多台设备同时登录同一账号

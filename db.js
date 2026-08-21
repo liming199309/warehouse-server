@@ -243,6 +243,16 @@ async function loadPg() {
   return normalize(r.rows[0].data)
 }
 
+// 从 Neon 重新拉最新 state 覆盖内存快照
+// 用途：①登录前刷新（新账号立即生效）②写前刷新（避免旧内存覆盖云端新数据）
+async function reloadState() {
+  if (!usePg) return
+  await withLock(async () => {
+    const fresh = await loadPg()
+    state = fresh
+  })
+}
+
 // 启动时调用：决定是走 PG 还是本地
 async function bootstrap() {
   if (shouldUsePg()) {
@@ -261,6 +271,11 @@ async function bootstrap() {
       })
     }, 50 * 1000).unref()
     console.log('[DB] 已启动保活定时器（50s 间隔）')
+    // 后台同步定时器：每 60s 从 Neon 重拉最新数据（本地/云端双实例互同步，读接口最多滞后 1 分钟）
+    setInterval(() => {
+      reloadState().catch(e => console.warn('[DB] 后台同步失败（下个周期重试）:', e.message))
+    }, 60 * 1000).unref()
+    console.log('[DB] 已启动后台同步定时器（60s 间隔）')
   } else {
     state = loadLocal()
     console.log('[DB] 数据已从本地 JSON 加载：', {
@@ -292,6 +307,13 @@ function pruneNonces(state) {
 function mutate({ nonce, fn }) {
   if (usePg) {
     return withLock(async () => {
+      // 写前先从 Neon 拉最新，避免旧内存快照覆盖云端其他实例写入的新数据
+      try {
+        const fresh = await loadPg()
+        state = fresh
+      } catch (e) {
+        console.warn('[DB] 写前重载失败（继续用当前内存快照）:', e.message)
+      }
       if (nonce) {
         if (state.meta.nonceSeen[nonce]) {
           const e = new Error('请勿重复提交（系统已自动忽略重复操作）')
@@ -328,4 +350,4 @@ function mutate({ nonce, fn }) {
   }
 }
 
-module.exports = { getState, save, withLock, mutate, hashPassword, bootstrap, isPg: () => usePg }
+module.exports = { getState, save, withLock, mutate, reloadState, hashPassword, bootstrap, isPg: () => usePg }
