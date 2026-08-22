@@ -14,6 +14,8 @@ const statsRoutes = require('./routes/stats')
 const usersRoutes = require('./routes/users')
 const ordersRoutes = require('./routes/orders')
 const uploadRoutes = require('./routes/upload')
+const approvalRoutes = require('./routes/approvals')
+const messageRoutes = require('./routes/approvals').messagesRouter
 const db = require('./db')
 
 let __ready = false  // 标记 DB bootstrap 是否完成（保护冷启动期请求）
@@ -42,6 +44,8 @@ function build() {
   app.use('/api/users', usersRoutes)
   app.use('/api/orders', ordersRoutes)
   app.use('/api/upload', uploadRoutes)
+  app.use('/api/approvals', approvalRoutes)
+  app.use('/api/messages', messageRoutes)
 
   // Render 唯一可写目录是 /tmp，所以上传图片存到 /tmp
   const UPLOADS_DIR = process.env.UPLOADS_DIR || (process.env.RENDER ? '/tmp/uploads' : path.join(__dirname, 'data', 'uploads'))

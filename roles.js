@@ -32,6 +32,24 @@ const PERM_NAMES = {
   'price:view': '查看价格'
 }
 
+// 审批链定义：每条链是一组有序审核人（username），外加抄送人
+// 销售链：提交人 → 秦天宇(qty2026) → 赵原野(zyy2026) → 祖冬银(zdy2026)
+// 入库/退库/撤销链：提交人 → 黎明(liming2026) → 赵原野(zyy2026) → 祖冬银(zdy2026)
+// 所有流程抄送葛静(gj2026)
+const APPROVAL_CHAINS = {
+  outbound: { name: '销售出库', steps: ['qty2026', 'zyy2026', 'zdy2026'], cc: ['gj2026'] },
+  inbound:  { name: '采购入库', steps: ['liming2026', 'zyy2026', 'zdy2026'], cc: ['gj2026'] },
+  return:   { name: '退库',     steps: ['liming2026', 'zyy2026', 'zdy2026'], cc: ['gj2026'] },
+  revoke:   { name: '撤销',     steps: ['liming2026', 'zyy2026', 'zdy2026'], cc: ['gj2026'] }
+}
+
+// 审批状态
+const APPROVAL_STATUS = {
+  pending:  { key: 'pending',  name: '待审核' },
+  approved: { key: 'approved', name: '已通过' },
+  rejected: { key: 'rejected', name: '已驳回' }
+}
+
 // 订单状态机
 const ORDER_STATUS = {
   pending:          { key: 'pending',          name: '待审核',      next: ['manager_approved','rejected'] },
@@ -43,4 +61,4 @@ const ORDER_STATUS = {
   stock_short:      { key: 'stock_short',      name: '库存不足',    next: ['packed'] }
 }
 
-module.exports = { ROLES, DEFAULT_PERMS, PERM_NAMES, ORDER_STATUS }
+module.exports = { ROLES, DEFAULT_PERMS, PERM_NAMES, ORDER_STATUS, APPROVAL_CHAINS, APPROVAL_STATUS }

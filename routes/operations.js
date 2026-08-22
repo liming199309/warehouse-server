@@ -210,3 +210,7 @@ router.post('/sync', auth.authRequired, (req, res) => {
 })
 
 module.exports = router
+// 供审批流引擎复用（审批通过后执行实际库存变动）
+module.exports.doInbound = doInbound
+module.exports.doOutbound = doOutbound
+module.exports.doReturn = doReturn

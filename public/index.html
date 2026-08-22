@@ -41,6 +41,8 @@
       <button data-tab="orders" id="nav-orders" onclick="switchTab('orders', this)">订单</button>
       <button data-tab="rec" onclick="switchTab('rec', this)">交易记录</button>
       <button data-tab="stat" onclick="switchTab('stat', this)">统计</button>
+      <button data-tab="approve" id="nav-approve" onclick="switchTab('approve', this)">审批中心</button>
+      <button data-tab="msg" id="nav-msg" onclick="switchTab('msg', this)">消息</button>
       <button data-tab="users" id="nav-users" onclick="switchTab('users', this)">用户管理</button>
     </div>
 
@@ -204,6 +206,52 @@
           <tbody></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- 审批中心 -->
+    <div id="sec-approve" class="section">
+      <div class="toolbar">
+        <select id="ap-filter" onchange="loadApprovals()" class="filter-select">
+          <option value="all">全部状态</option>
+          <option value="pending">待审核</option>
+          <option value="approved">已通过</option>
+          <option value="rejected">已驳回</option>
+          <option value="cancelled">已撤回</option>
+        </select>
+        <select id="ap-type" onchange="loadApprovals()" class="filter-select">
+          <option value="all">全部类型</option>
+          <option value="outbound">销售出库</option>
+          <option value="inbound">采购入库</option>
+          <option value="return">退库</option>
+          <option value="revoke">撤销</option>
+        </select>
+        <button class="btn btn-sm" onclick="loadApprovals()">刷新</button>
+        <span id="ap-count" class="count-tip">加载中...</span>
+      </div>
+      <div style="max-height:62vh;overflow:auto;">
+        <table id="ap-table">
+          <thead><tr>
+            <th>单号</th><th>类型</th><th>摘要</th><th>提交人</th>
+            <th>审核链</th><th>状态</th><th>提交时间</th><th>操作</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="ap-detail" class="panel" style="display:none;"></div>
+    </div>
+
+    <!-- 消息中心 -->
+    <div id="sec-msg" class="section">
+      <div class="toolbar">
+        <select id="msg-filter" onchange="loadMessages()" class="filter-select">
+          <option value="all">全部</option>
+          <option value="unread">未读</option>
+        </select>
+        <button class="btn btn-sm" onclick="loadMessages()">刷新</button>
+        <button class="btn btn-ghost btn-sm" onclick="markAllRead()">全部已读</button>
+        <span id="msg-count" class="count-tip">加载中...</span>
+      </div>
+      <div id="msg-list" style="max-height:62vh;overflow:auto;"></div>
     </div>
 
     <!-- 用户管理 -->

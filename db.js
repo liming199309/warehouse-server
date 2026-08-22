@@ -188,6 +188,8 @@ function normalize(state) {
   if (!state.meta.nonceSeen) state.meta.nonceSeen = {}
   if (!state.records) state.records = []
   if (!state.inventory) state.inventory = []
+  if (!state.approvals) state.approvals = []
+  if (!state.messages) state.messages = []
   const today = new Date().toISOString().slice(0, 10)
   state.inventory = state.inventory.map(it => {
     let cat = it.category

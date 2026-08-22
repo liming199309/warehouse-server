@@ -80,6 +80,8 @@ function switchTab(name, btn) {
   if (name === 'inv') loadInventory()
   if (name === 'rec') loadRecords()
   if (name === 'stat') loadStats()
+  if (name === 'approve') loadApprovals()
+  if (name === 'msg') loadMessages()
   if (name === 'users') loadUsers()
   if (name === 'orders') loadOrders()
 }
@@ -578,3 +580,102 @@ function downloadCSV(filename, rows) {
   a.href = url; a.download = filename; a.click()
   URL.revokeObjectURL(url)
 }
+
+// ===== 审批中心 =====
+const AP_STATUS_NAME = { pending: '待审核', approved: '已通过', rejected: '已驳回', cancelled: '已撤回' }
+const AP_TYPE_NAME = { outbound: '销售出库', inbound: '采购入库', return: '退库', revoke: '撤销' }
+let AP_LIST = []
+
+async function loadApprovals() {
+  const status = document.getElementById('ap-filter').value
+  const type = document.getElementById('ap-type').value
+  const res = await api('/approvals')
+  if (!res.data.success) return
+  let list = res.data.approvals || []
+  if (status !== 'all') list = list.filter(a => a.status === status)
+  if (type !== 'all') list = list.filter(a => a.type === type)
+  AP_LIST = list
+  document.getElementById('ap-count').textContent = `${list.length} 条审批单`
+  const tbody = document.querySelector('#ap-table tbody')
+  tbody.innerHTML = list.map(a => {
+    const chainHtml = (a.steps || []).map((s, i) => {
+      const st = s.status === 'approved' ? '✅' : (s.status === 'rejected' ? '❌' : '⏳')
+      return `${st}${s.name}`
+    }).join(' → ')
+    const canAudit = a.status === 'pending' && (a.steps || [])[a.step] && (a.steps[a.step].username === USER.username)
+    return `<tr>
+      <td>${a.id}</td>
+      <td>${AP_TYPE_NAME[a.type] || a.type}</td>
+      <td>${a.summary || ''}</td>
+      <td>${a.submitterName || ''}</td>
+      <td style="font-size:12px;">${chainHtml}</td>
+      <td>${AP_STATUS_NAME[a.status] || a.status}</td>
+      <td style="font-size:12px;">${(a.createdAt || '').slice(0, 16)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="showApDetail('${a.id}')">详情</button>
+        ${canAudit ? `<button class="btn btn-sm" onclick="auditAp('${a.id}','approve')">通过</button>
+        <button class="btn btn-ghost btn-sm" onclick="auditAp('${a.id}','reject')">驳回</button>` : ''}
+      </td>
+    </tr>`
+  }).join('') || '<tr><td colspan="8" style="text-align:center;color:#999;">暂无审批单</td></tr>'
+}
+
+function showApDetail(id) {
+  const a = AP_LIST.find(x => x.id === id)
+  if (!a) return
+  const panel = document.getElementById('ap-detail')
+  const stepsHtml = (a.steps || []).map((s, i) => `
+    <div style="padding:6px 0;border-bottom:1px dashed #eee;">
+      第${i + 1}级 ${s.name}（${s.username}）— ${AP_STATUS_NAME[s.status] || s.status}
+      ${s.comment ? '｜意见：' + s.comment : ''} ${s.auditAt ? '｜' + s.auditAt : ''}
+    </div>`).join('')
+  const logHtml = (a.auditLog || []).map(l => `<div style="font-size:12px;color:#777;">${l}</div>`).join('')
+  panel.innerHTML = `<h3>${AP_TYPE_NAME[a.type] || a.type}审批 · ${a.id}</h3>
+    <div style="padding:6px 0;">提交人：${a.submitterName}（${a.submitter}）｜摘要：${a.summary}｜状态：${AP_STATUS_NAME[a.status]}</div>
+    <div style="padding:6px 0;">${a.payload && a.payload.reason ? '理由：' + a.payload.reason : ''}</div>
+    <div style="margin-top:8px;font-weight:bold;">审核链</div>${stepsHtml}
+    ${logHtml ? '<div style="margin-top:8px;font-weight:bold;">流转记录</div>' + logHtml : ''}
+    ${a.execResult ? `<div style="margin-top:8px;">执行结果：${a.execResult.msg || ''} ${a.orderNo ? '（单号 ' + a.orderNo + '）' : ''}</div>` : ''}
+    <div class="toolbar"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('ap-detail').style.display='none'">关闭</button></div>`
+  panel.style.display = 'block'
+}
+
+async function auditAp(id, action) {
+  const comment = prompt(action === 'approve' ? '审核意见（可留空）' : '驳回理由') || ''
+  if (action === 'reject' && !comment) return alert('驳回必须填写理由')
+  const res = await api('/approvals/' + id + '/' + action, 'POST', { comment })
+  if (res.data.success) { alert(res.data.msg); loadApprovals() }
+  else alert(res.data.msg || '操作失败')
+}
+
+// ===== 消息中心 =====
+let MSG_LIST = []
+
+async function loadMessages() {
+  const filter = document.getElementById('msg-filter').value
+  const res = await api('/messages')
+  if (!res.data.success) return
+  let list = res.data.messages || []
+  if (filter === 'unread') list = list.filter(m => !m.read)
+  MSG_LIST = list
+  document.getElementById('msg-count').textContent = `未读 ${res.data.unread || 0} 条 / 共 ${list.length} 条`
+  document.getElementById('msg-list').innerHTML = list.map(m => `
+    <div class="panel" style="margin:8px 0;${m.read ? 'opacity:0.55;' : ''}cursor:pointer;" onclick="readMsg('${m.id}')">
+      <div style="display:flex;justify-content:space-between;">
+        <b>${m.read ? '' : '🔴 '}${m.title}</b>
+        <span style="font-size:12px;color:#999;">${(m.createdAt || '').slice(0, 16)}</span>
+      </div>
+      <div style="margin-top:6px;font-size:13px;color:#555;">${m.content}</div>
+    </div>`).join('') || '<div style="text-align:center;color:#999;padding:30px;">暂无消息</div>'
+}
+
+async function readMsg(id) {
+  const res = await api('/messages/' + id + '/read', 'POST')
+  if (res.data.success) loadMessages()
+}
+
+async function markAllRead() {
+  const res = await api('/messages/read-all', 'POST')
+  if (res.data.success) loadMessages()
+}
+
